@@ -26,6 +26,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
+import base64
 
 from ppa_exposure import (
     compute_exposure_metrics,
@@ -165,16 +166,21 @@ with st.sidebar:
 # Header
 # ---------------------------------------------------------------------------
 
-col_logo, col_title = st.columns([1, 15])
-
-with col_logo:
-    st.image(orsted_logo, width=50) 
-
-with col_title:
-    st.markdown("<h1 style='margin-top: -20px;'>PPA Exposure Modelling</h1>", unsafe_allow_html=True)
+with open(logo_path, "rb") as f:
+    img_base64 = base64.b64encode(f.read()).decode()
 
 st.markdown(
-    f"<p style='color:{TEXT_DIM}; font-size:1.05rem; margin-top:-0.5rem;'>"
+    f"""
+    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 0px;">
+        <img src="data:image/png;base64,{img_base64}" width="45" style="border-radius: 0;">
+        <h1 style="margin: 0; padding: 0;">PPA Exposure Modelling</h1>
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    f"<p style='color:{TEXT_DIM}; font-size:1.05rem; margin-top:0.2rem;'>"
     "Credit and liquidity exposure on a long-dated Power Purchase Agreement — "
     "DK1 zonal power, market-consistent Monte Carlo."
     "</p>",
