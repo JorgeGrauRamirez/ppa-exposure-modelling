@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from PIL import Image
 
 # Make the package importable when running from app/
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +39,8 @@ from ppa_exposure.validation import check_martingale
 
 DATA_DIR = ROOT / "data"
 
+logo_path = "../logo/Orsted_logo.png" 
+orsted_logo = Image.open(logo_path)
 
 # ---------------------------------------------------------------------------
 # Page configuration and theming
@@ -45,7 +48,7 @@ DATA_DIR = ROOT / "data"
 
 st.set_page_config(
     page_title="PPA Exposure Modelling",
-    page_icon="../logo/Orsted_logo.png",
+    page_icon=orsted_logo,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -162,7 +165,17 @@ with st.sidebar:
 # Header
 # ---------------------------------------------------------------------------
 
-st.markdown("# ⚡ PPA Exposure Modelling")
+col_logo, col_title = st.columns([1, 8])
+
+with col_logo:
+    # Ajusta el width (ancho) según veas conveniente para que encaje bien
+    st.image(orsted_logo, width=120) 
+
+with col_title:
+    # Usamos un poco de HTML para quitar el margen superior y alinear el texto con el logo
+    st.markdown("<h1 style='margin-top: -20px;'>PPA Exposure Modelling</h1>", unsafe_allow_html=True)
+
+# El subtítulo se mantiene igual
 st.markdown(
     f"<p style='color:{TEXT_DIM}; font-size:1.05rem; margin-top:-0.5rem;'>"
     "Credit and liquidity exposure on a long-dated Power Purchase Agreement — "
