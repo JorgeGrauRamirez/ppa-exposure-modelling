@@ -168,7 +168,7 @@ with st.sidebar:
 col_logo, col_title = st.columns([1, 8])
 
 with col_logo:
-    st.image(orsted_logo, width=80) 
+    st.image(orsted_logo, width=200) 
 
 with col_title:
     st.markdown("<h1 style='margin-top: -20px;'>PPA Exposure Modelling</h1>", unsafe_allow_html=True)
