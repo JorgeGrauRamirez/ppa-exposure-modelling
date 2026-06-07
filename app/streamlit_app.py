@@ -168,14 +168,11 @@ with st.sidebar:
 col_logo, col_title = st.columns([1, 8])
 
 with col_logo:
-    # Ajusta el width (ancho) según veas conveniente para que encaje bien
-    st.image(orsted_logo, width=120) 
+    st.image(orsted_logo, width=80) 
 
 with col_title:
-    # Usamos un poco de HTML para quitar el margen superior y alinear el texto con el logo
     st.markdown("<h1 style='margin-top: -20px;'>PPA Exposure Modelling</h1>", unsafe_allow_html=True)
 
-# El subtítulo se mantiene igual
 st.markdown(
     f"<p style='color:{TEXT_DIM}; font-size:1.05rem; margin-top:-0.5rem;'>"
     "Credit and liquidity exposure on a long-dated Power Purchase Agreement — "
