@@ -39,7 +39,7 @@ from ppa_exposure.validation import check_martingale
 
 DATA_DIR = ROOT / "data"
 
-logo_path = "../logo/Orsted_logo.png" 
+logo_path = ROOT / "logo" / "Orsted_logo.png"
 orsted_logo = Image.open(logo_path)
 
 # ---------------------------------------------------------------------------
