@@ -4,5 +4,6 @@ scipy>=1.11
 matplotlib>=3.8
 requests>=2.31
 streamlit>=1.30
+plotly>=5.18
 pytest>=7.4
 jupyter>=1.0
