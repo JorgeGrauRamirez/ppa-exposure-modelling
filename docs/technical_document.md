@@ -56,6 +56,8 @@ where `V` is baseload capacity in MW, `h_m` is the number of hours in month *m*,
 | Discount rate | 2% continuous, flat | Approximate EUR short rate. Production implementation would use a EUR OIS curve. |
 | Perspective | Ørsted as fixed receiver | Seller of physical power, receives fixed. Mirrors Ørsted's actual position as a renewable generator. |
 
+> **All numerical results in this document refer to the base-case run specified above.** The accompanying Streamlit application permits interactive exploration of alternative parameter configurations (volume, threshold, model parameters, simulation settings). For reproducibility, the model artefacts (random seed 42, calibrated parameters persisted in `data/model_params.json`, monthly forward curve in `data/monthly_forward_curve_dk1_20260604.csv`) deterministically recreate the exact figures shown in this document.
+
 ---
 
 ## 2. Data
