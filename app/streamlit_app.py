@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from PIL import Image
 
 # Make the package importable when running from app/
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,9 +44,11 @@ DATA_DIR = ROOT / "data"
 # Page configuration and theming
 # ---------------------------------------------------------------------------
 
+orsted_logo = Image.open("../logo/Orsted_logo.png")
+
 st.set_page_config(
     page_title="PPA Exposure Modelling",
-    page_icon="⚡",
+    page_icon=orsted_logo,
     layout="wide",
     initial_sidebar_state="expanded",
 )
