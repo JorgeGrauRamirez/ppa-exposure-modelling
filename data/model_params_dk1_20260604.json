@@ -1,0 +1,50 @@
+{
+  "model": "schwartz_one_factor_shifted_log_with_seasonality",
+  "price_area": "DK1",
+  "calibration_frequency": "monthly",
+  "calibration_rationale": "Monthly calibration is used because the PPA exposure engine works on monthly settlement dates. This aligns the mean-reversion speed with the relevant exposure horizon and avoids using daily spot noise to parameterise a five-year monthly exposure model.",
+  "calibration_date": "2026-05-01",
+  "calibration_window": {
+    "start": "2021-01-01",
+    "end": "2026-05-01",
+    "n_months": 65
+  },
+  "shift_constant_c": 100.0,
+  "transform": "X_t = log(S_t + c)",
+  "dt_years": 0.08333333333333333,
+  "seasonality_specification": "theta + A1*cos(omega*t) + B1*sin(omega*t) + A2*cos(2*omega*t) + B2*sin(2*omega*t), with t in months",
+  "parameters": {
+    "kappa_per_year": 2.7660040786145457,
+    "sigma_annualized": 0.5985856567462083,
+    "theta": 5.300882087276546,
+    "A1": -0.011269847102126931,
+    "B1": -0.07169282423587339,
+    "A2": 0.019789390516532397,
+    "B2": 0.013025946635582684,
+    "omega": 0.5235987755982988,
+    "phi_monthly": 0.7941361650875766
+  },
+  "derived": {
+    "half_life_years": 0.2505951404479249,
+    "half_life_months": 3.0071416853750987,
+    "half_life_days": 91.52987504860458,
+    "seasonality_r2": 0.04287753080516665,
+    "innovation_std_monthly": 0.1546687692843813
+  },
+  "diagnostics": {
+    "ar1_with_intercept_intercept": 0.005576819852660748,
+    "ar1_with_intercept_phi": 0.7942331237994099,
+    "innovation_mean": 0.005576706326261838,
+    "innovation_std": 0.1546687692843813,
+    "innovation_skew": 0.668624366538765,
+    "innovation_excess_kurtosis": 3.3874939800839803,
+    "jarque_bera_pvalue": 2.088016470839023e-08
+  },
+  "model_limitations": [
+    "Single-factor model: does not capture separate short-term and long-term risk factors.",
+    "Gaussian residual innovations: does not explicitly model jumps or price spikes.",
+    "Shifted-log specification prevents simulated prices below -c; negative prices are possible only down to the selected shift boundary.",
+    "Monthly calibration is appropriate for monthly exposure but does not model hourly, daily, or intramonth collateral volatility."
+  ],
+  "next_step_extension": "Lucia-Schwartz two-factor model to jointly capture short-term mean-reverting shocks and long-term structural price dynamics."
+}
