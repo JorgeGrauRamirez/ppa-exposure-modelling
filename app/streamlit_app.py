@@ -344,21 +344,38 @@ with tab_price:
     {sigma:.2f} annualized, half-life {np.log(2)/kappa*365.25:.0f} days
     """)
 
-    # Spot distribution at horizons
+    # Spot distribution at horizons (user-selectable)
     st.markdown("##### Spot distribution at selected horizons")
     st.markdown(
         f"<p style='color:{TEXT_DIM};'>"
-        "How the model expects the spot to be distributed at three forward-looking horizons. "
-        "The amber dashed line marks the market forward at each date. By construction, the empirical mean "
-        "across simulated paths should remain close to this value, within Monte Carlo error."
+        "Choose three forward-looking horizons to inspect the simulated spot distribution. "
+        "The amber dashed line marks the market forward at each date — by construction, the empirical mean "
+        "across simulated paths matches this value (martingale calibration)."
         "</p>",
         unsafe_allow_html=True,
     )
 
-    # Pick three representative horizons: ~1Y, ~3Y, ~5Y from valuation date
     n_months = len(delivery_months)
-    horizons_idx = [min(11, n_months - 1), min(35, n_months - 1), n_months - 1]
-    horizons_labels = [delivery_months[i].strftime("%b %Y") for i in horizons_idx]
+    available_months = [d.strftime("%b %Y") for d in delivery_months]
+    default_indices = [min(11, n_months - 1), min(35, n_months - 1), n_months - 1]
+
+    sel_col1, sel_col2, sel_col3 = st.columns(3)
+    with sel_col1:
+        sel1 = st.selectbox("Horizon 1", available_months,
+                            index=default_indices[0], key="h1")
+    with sel_col2:
+        sel2 = st.selectbox("Horizon 2", available_months,
+                            index=default_indices[1], key="h2")
+    with sel_col3:
+        sel3 = st.selectbox("Horizon 3", available_months,
+                            index=default_indices[2], key="h3")
+
+    horizons_idx = [
+        available_months.index(sel1),
+        available_months.index(sel2),
+        available_months.index(sel3),
+    ]
+    horizons_labels = [sel1, sel2, sel3]
 
     fig_h = make_subplots(rows=1, cols=3, subplot_titles=horizons_labels,
                           horizontal_spacing=0.06)
@@ -384,9 +401,11 @@ with tab_price:
     fig_h.update_xaxes(title_text="EUR/MWh")
     fig_h.update_yaxes(title_text="Paths", row=1, col=1)
     st.plotly_chart(fig_h, use_container_width=True)
+    last_idx = horizons_idx[-1]
+    spread = np.percentile(sim.S_paths[:, last_idx], 95) - np.percentile(sim.S_paths[:, last_idx], 5)
     st.caption(f"Amber dashed = market forward; white dotted = empirical Monte Carlo mean. "
-               f"At {horizons_labels[-1]}, the model implies a {(np.percentile(sim.S_paths[:, horizons_idx[-1]], 95) - np.percentile(sim.S_paths[:, horizons_idx[-1]], 5)):.0f} EUR/MWh "
-               f"interquantile spread (p5 to p95), reflecting accumulated uncertainty over the deal life.")
+               f"At **{horizons_labels[-1]}**, the model implies a {spread:.0f} EUR/MWh "
+               f"interquantile spread (p5 to p95), reflecting accumulated uncertainty from valuation to that horizon.")
 
     # Martingale check expandable
     with st.expander("Martingale check (audit-friendly)", expanded=False):
