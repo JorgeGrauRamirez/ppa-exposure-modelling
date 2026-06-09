@@ -527,7 +527,7 @@ with tab_liq:
     no_post_pct = liquidity.fraction_no_posting * 100
 
     col_rec1, col_rec2, col_rec3 = st.columns(3)
-    col_rec1.success(f"**Recommended buffer**\n\n**{rec_buffer:.1f} M EUR**\n\n"
+    col_rec1.success(f"**Model-implied liquidity buffer**\n\n**{rec_buffer:.1f} M EUR**\n\n"
                      f"95th percentile of peak collateral across paths")
     col_rec2.warning(f"**Max single shock**\n\n**{rec_shock:.1f} M EUR**\n\n"
                      f"Largest plausible month-over-month outflow (p95)")
@@ -587,25 +587,43 @@ with tab_liq:
     n_show = min(20, len(stressed_indices))
     if n_show > 0:
         sample = rng.choice(stressed_indices, size=n_show, replace=False)
+        # Calcular el máximo de los paths seleccionados para cada mes
+        max_sampled = collateral_all[sample, :].max(axis=0) / 1e6
     else:
         sample = []
+        max_sampled = np.zeros(len(delivery_months))
 
     fig_t = go.Figure()
+    
+    # 1. Dibujar las 20 trayectorias pero DESACTIVAR su hover
     for i, idx in enumerate(sample):
         fig_t.add_trace(go.Scatter(
             x=delivery_months, y=collateral_all[idx, :] / 1e6,
             mode="lines", line=dict(color=LIQUIDITY_COLOR, width=1.2),
             opacity=0.35, showlegend=(i == 0),
             name="Top 1% stressed paths" if i == 0 else None,
-            hovertemplate="Stressed path: %{y:.1f} M EUR<extra></extra>"
+            hoverinfo="skip"  # <-- Esto es clave: las oculta del recuadro
         ))
-    # Expected line for reference
+
+    # 2. Añadir una traza invisible solo para mostrar el "Máximo" en el hover
+    if n_show > 0:
+        fig_t.add_trace(go.Scatter(
+            x=delivery_months, y=max_sampled,
+            mode="lines", 
+            line=dict(color="rgba(0,0,0,0)"),  # Totalmente transparente
+            showlegend=False,
+            name="Max Stressed",
+            hovertemplate="Max Stressed: %{y:.1f} M EUR<extra></extra>"
+        ))
+
+    # 3. Expected line for reference (sin cambios)
     fig_t.add_trace(go.Scatter(
         x=delivery_months, y=liquidity.EE_collateral / 1e6,
         mode="lines", line=dict(color="white", width=2.5),
         name="Expected (across all paths)",
         hovertemplate="EE: %{y:.2f} M EUR<extra></extra>"
     ))
+
     fig_t.update_layout(**PLOTLY_LAYOUT, height=360,
                         yaxis_title="M EUR posted",
                         hovermode="x unified",
@@ -742,7 +760,7 @@ with tab_sens:
     - Unsecured credit exposure **increases by {delta_unsec:+.1f} M EUR**
     - Probability of never posting goes from **{row_low['frac_no_posting_pct']:.0f}% → {row_high['frac_no_posting_pct']:.0f}%**
 
-    This is the precise quantification a credit team uses when negotiating the CSA.
+    This provides a transparent quantification of the trade-off a credit team would consider when negotiating the CSA.
     """)
 
     # Sensitivity table
