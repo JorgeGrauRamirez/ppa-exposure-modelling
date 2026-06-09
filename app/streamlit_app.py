@@ -81,6 +81,8 @@ st.markdown("""
         padding: 8px 16px;
         background: rgba(255,255,255,0.03);
         border-radius: 6px 6px 0 0;
+        font-weight: 500;
+        letter-spacing: 0.02em;
     }
     .stTabs [aria-selected="true"] {
         background: rgba(239, 83, 80, 0.15);
@@ -116,10 +118,10 @@ def load_model_params() -> dict | None:
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.markdown("### ⚙️ Configuration")
+    st.markdown("### Configuration")
     st.caption("Adjust deal terms and model settings. All metrics recompute live.")
 
-    with st.expander("📄 Deal terms", expanded=True):
+    with st.expander("Deal terms", expanded=True):
         volume_mw = st.number_input("Baseload volume (MW)", 1.0, 1000.0, 100.0, 10.0,
                                     help="Constant capacity sold/bought 24/7.")
         discount_rate = st.slider("Discount rate (%)", 0.0, 5.0, 2.0, 0.25,
@@ -129,18 +131,18 @@ with st.sidebar:
         manual_fixed = st.number_input("Manual fixed price (EUR/MWh)", value=80.0, step=1.0) \
             if fixed_mode == "Manual override" else None
 
-    with st.expander("🔒 CSA / collateral", expanded=True):
+    with st.expander("CSA / collateral", expanded=True):
         threshold_m = st.slider("Threshold (M EUR, symmetric)", 0.0, 30.0, 5.0, 0.5,
                                 help="No collateral posted until exposure exceeds this amount.")
         threshold = threshold_m * 1e6
 
-    with st.expander("🎲 Monte Carlo settings", expanded=False):
+    with st.expander("Monte Carlo settings", expanded=False):
         n_paths = st.select_slider("Paths", [1000, 2000, 5000, 10000, 20000], 10000)
         use_antithetic = st.checkbox("Antithetic variates", True)
         seed = st.number_input("Random seed", value=42, step=1)
         pfe_quantile = st.slider("PFE confidence (%)", 90, 99, 95) / 100
 
-    with st.expander("🧪 Model parameters", expanded=False):
+    with st.expander("Model parameters", expanded=False):
         params = load_model_params()
         if params:
             default_kappa = params["parameters"]["kappa_per_year"]
@@ -190,7 +192,7 @@ st.markdown(
 # Load curve
 fc_df = load_forward_curve()
 if fc_df.empty:
-    st.error("⚠️ No monthly forward curve found in `data/`. "
+    st.error("No monthly forward curve found in `data/`. "
              "Run `notebooks/03_seasonal_bootstrap.ipynb` before launching the app.")
     st.stop()
 
@@ -248,8 +250,8 @@ st.markdown("---")
 # ---------------------------------------------------------------------------
 
 tab_price, tab_exp, tab_liq, tab_sens, tab_assum = st.tabs([
-    "📈 Price model", "📊 Exposure profile", "💧 Liquidity overlay",
-    "⚖️ Sensitivity", "📋 Assumptions"
+    "Price model", "Exposure profile", "Liquidity overlay",
+    "Sensitivity", "Assumptions"
 ])
 
 
@@ -276,21 +278,23 @@ with tab_price:
 
     fig = go.Figure()
 
-    # 5-95 band
-    fig.add_trace(go.Scatter(x=delivery_months, y=pct95, mode="lines",
-                             line=dict(width=0), showlegend=False, hoverinfo="skip"))
+    # 5-95 band (lower bound first, then upper with fill)
     fig.add_trace(go.Scatter(x=delivery_months, y=pct5, mode="lines",
+                             line=dict(width=0), showlegend=False, hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=delivery_months, y=pct95, mode="lines",
                              line=dict(width=0), fill="tonexty",
                              fillcolor="rgba(79, 195, 247, 0.12)",
-                             name="5–95% band", hovertemplate="p5–p95<extra></extra>"))
+                             name="5–95% band",
+                             hovertemplate="p95: %{y:.1f} EUR/MWh<extra></extra>"))
 
-    # 25-75 band
-    fig.add_trace(go.Scatter(x=delivery_months, y=pct75, mode="lines",
-                             line=dict(width=0), showlegend=False, hoverinfo="skip"))
+    # 25-75 band (lower bound first, then upper with fill)
     fig.add_trace(go.Scatter(x=delivery_months, y=pct25, mode="lines",
+                             line=dict(width=0), showlegend=False, hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=delivery_months, y=pct75, mode="lines",
                              line=dict(width=0), fill="tonexty",
                              fillcolor="rgba(79, 195, 247, 0.25)",
-                             name="25–75% band", hovertemplate="p25–p75<extra></extra>"))
+                             name="25–75% band",
+                             hovertemplate="p75: %{y:.1f} EUR/MWh<extra></extra>"))
 
     # Market forward
     fig.add_trace(go.Scatter(x=delivery_months, y=forward_curve, mode="lines+markers",
@@ -329,14 +333,58 @@ with tab_price:
     {sigma:.2f} annualized, half-life {np.log(2)/kappa*365.25:.0f} days
     """)
 
+    # Spot distribution at horizons
+    st.markdown("##### Spot distribution at selected horizons")
+    st.markdown(
+        f"<p style='color:{TEXT_DIM};'>"
+        "How the model expects the spot to be distributed at three forward-looking horizons. "
+        "The amber dashed line marks the market forward at each date — by construction, the empirical mean "
+        "across simulated paths matches this value (martingale calibration)."
+        "</p>",
+        unsafe_allow_html=True,
+    )
+
+    # Pick three representative horizons: ~1Y, ~3Y, ~5Y from valuation date
+    n_months = len(delivery_months)
+    horizons_idx = [min(11, n_months - 1), min(35, n_months - 1), n_months - 1]
+    horizons_labels = [delivery_months[i].strftime("%b %Y") for i in horizons_idx]
+
+    fig_h = make_subplots(rows=1, cols=3, subplot_titles=horizons_labels,
+                          horizontal_spacing=0.06)
+
+    for col_idx, h_idx in enumerate(horizons_idx, start=1):
+        spot_at_h = sim.S_paths[:, h_idx]
+        fig_h.add_trace(
+            go.Histogram(x=spot_at_h, nbinsx=50,
+                         marker=dict(color=CREDIT_COLOR, opacity=0.65,
+                                     line=dict(color="rgba(0,0,0,0)", width=0)),
+                         showlegend=False,
+                         hovertemplate="Spot ≈ %{x:.0f} EUR/MWh<br>%{y} paths<extra></extra>"),
+            row=1, col=col_idx
+        )
+        # Vertical line at market forward
+        fig_h.add_vline(x=forward_curve[h_idx], line_dash="dash",
+                        line_color=ACCENT, line_width=2, row=1, col=col_idx)
+        # Vertical line at empirical mean (very close to forward)
+        fig_h.add_vline(x=float(spot_at_h.mean()), line_dash="dot",
+                        line_color="white", line_width=1, opacity=0.6, row=1, col=col_idx)
+
+    fig_h.update_layout(**PLOTLY_LAYOUT, height=300, showlegend=False)
+    fig_h.update_xaxes(title_text="EUR/MWh")
+    fig_h.update_yaxes(title_text="Paths", row=1, col=1)
+    st.plotly_chart(fig_h, use_container_width=True)
+    st.caption(f"Amber dashed = market forward; white dotted = empirical Monte Carlo mean. "
+               f"At {horizons_labels[-1]}, the model implies a {(np.percentile(sim.S_paths[:, horizons_idx[-1]], 95) - np.percentile(sim.S_paths[:, horizons_idx[-1]], 5)):.0f} EUR/MWh "
+               f"interquantile spread (p5 to p95), reflecting accumulated uncertainty over the deal life.")
+
     # Martingale check expandable
-    with st.expander("🔍 Martingale check (audit-friendly)", expanded=False):
+    with st.expander("Martingale check (audit-friendly)", expanded=False):
         mart = check_martingale(sim)
         max_z = mart.attrs["max_abs_z"]
         if max_z < 3.0:
-            st.success(f"✅ Passes within 3σ tolerance — max |z| = {max_z:.2f}")
+            st.success(f"Passes within 3σ tolerance — max |z| = {max_z:.2f}")
         else:
-            st.warning(f"⚠️ Max |z| = {max_z:.2f} exceeds 3σ. May indicate insufficient paths.")
+            st.warning(f"Max |z| = {max_z:.2f} exceeds 3σ. May indicate insufficient paths.")
 
         st.caption("The empirical mean of simulated spot must equal the market forward at every horizon. "
                    "Z-score = (empirical − market) / Monte Carlo standard error.")
@@ -370,12 +418,12 @@ with tab_exp:
     with col_summary:
         ratio = exposure.Max_PFE_credit / max(exposure.Max_PFE_liq, 1)
         if ratio > 1.5:
-            st.info(f"📌 **Credit dominates** ({ratio:.1f}× larger). The backwardated curve "
+            st.info(f"**Credit dominates** ({ratio:.1f}× larger). The backwardated curve "
                     f"creates a structural positive drift in MtM as early high-price months settle.")
         elif ratio < 0.67:
-            st.info(f"📌 **Liquidity dominates** ({1/ratio:.1f}× larger).")
+            st.info(f"**Liquidity dominates** ({1/ratio:.1f}× larger).")
         else:
-            st.info(f"📌 **Roughly symmetric** — credit and liquidity exposures are comparable.")
+            st.info(f"**Roughly symmetric** — credit and liquidity exposures are comparable.")
 
     # Build double-panel exposure chart
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
@@ -383,11 +431,11 @@ with tab_exp:
                                         "Liquidity (Ørsted out-of-money)"),
                         vertical_spacing=0.12)
 
-    # Credit panel
-    fig.add_trace(go.Scatter(x=delivery_months, y=exposure.PFE_credit/1e6,
+    # Credit panel — base (zeros) first, then PFE with fill
+    fig.add_trace(go.Scatter(x=delivery_months, y=np.zeros_like(exposure.PFE_credit),
                              mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"),
                   row=1, col=1)
-    fig.add_trace(go.Scatter(x=delivery_months, y=np.zeros_like(exposure.PFE_credit),
+    fig.add_trace(go.Scatter(x=delivery_months, y=exposure.PFE_credit/1e6,
                              mode="lines", line=dict(width=0), fill="tonexty",
                              fillcolor="rgba(79, 195, 247, 0.20)",
                              name=f"PFE {int(pfe_quantile*100)}%",
@@ -408,11 +456,11 @@ with tab_exp:
         row=1, col=1,
     )
 
-    # Liquidity panel
-    fig.add_trace(go.Scatter(x=delivery_months, y=exposure.PFE_liq/1e6,
+    # Liquidity panel — base (zeros) first, then PFE with fill
+    fig.add_trace(go.Scatter(x=delivery_months, y=np.zeros_like(exposure.PFE_liq),
                              mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"),
                   row=2, col=1)
-    fig.add_trace(go.Scatter(x=delivery_months, y=np.zeros_like(exposure.PFE_liq),
+    fig.add_trace(go.Scatter(x=delivery_months, y=exposure.PFE_liq/1e6,
                              mode="lines", line=dict(width=0), fill="tonexty",
                              fillcolor="rgba(239, 83, 80, 0.20)",
                              name=f"PFE {int(pfe_quantile*100)}% (liq)",
@@ -479,18 +527,18 @@ with tab_liq:
     no_post_pct = liquidity.fraction_no_posting * 100
 
     col_rec1, col_rec2, col_rec3 = st.columns(3)
-    col_rec1.success(f"💰 **Recommended buffer**\n\n**{rec_buffer:.1f} M EUR**\n\n"
+    col_rec1.success(f"**Recommended buffer**\n\n**{rec_buffer:.1f} M EUR**\n\n"
                      f"95th percentile of peak collateral across paths")
-    col_rec2.warning(f"⚡ **Max single shock**\n\n**{rec_shock:.1f} M EUR**\n\n"
+    col_rec2.warning(f"**Max single shock**\n\n**{rec_shock:.1f} M EUR**\n\n"
                      f"Largest plausible month-over-month outflow (p95)")
-    col_rec3.info(f"📉 **No-posting probability**\n\n**{no_post_pct:.1f}%**\n\n"
+    col_rec3.info(f"**No-posting probability**\n\n**{no_post_pct:.1f}%**\n\n"
                   f"Paths that never post collateral over the deal life")
 
-    # Profile chart
+    # Profile chart — base (zeros) first, then PFE with fill
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=delivery_months, y=liquidity.PFE_collateral/1e6,
-                             mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
     fig.add_trace(go.Scatter(x=delivery_months, y=np.zeros_like(liquidity.PFE_collateral),
+                             mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=delivery_months, y=liquidity.PFE_collateral/1e6,
                              mode="lines", line=dict(width=0), fill="tonexty",
                              fillcolor="rgba(239, 83, 80, 0.20)",
                              name=f"PFE {int(pfe_quantile*100)}%",
@@ -506,6 +554,67 @@ with tab_liq:
                       hovermode="x unified",
                       legend=dict(orientation="h", yanchor="top", y=1.1, x=0))
     st.plotly_chart(fig, use_container_width=True)
+
+    # Caption clarifying the marginal vs path-level distinction
+    st.caption(
+        f"At each month, the shaded area shows the {int(pfe_quantile*100)}th percentile of collateral "
+        f"posted across all paths. Where fewer than {int((1-pfe_quantile)*100)}% of paths post collateral "
+        f"in a given month (i.e., the deal is mostly in-the-money for Ørsted), the marginal PFE drops "
+        f"to zero. The **Recommended buffer ({rec_buffer:.1f} M EUR)** is a different statistic: the "
+        f"{int(pfe_quantile*100)}th percentile of the **per-path maximum** across the deal life — the "
+        f"path-level worst-case buffer requirement."
+    )
+
+    # Stressed path trajectories
+    st.markdown("##### Trajectories on stressed paths")
+    st.markdown(
+        f"<p style='color:{TEXT_DIM};'>"
+        "Sample of trajectories from the worst 1% of paths (by peak collateral posted), with the "
+        "expected profile overlaid. Shows the actual dynamics a treasury team would face under stress, "
+        "rather than the smoothed quantile envelope."
+        "</p>",
+        unsafe_allow_html=True,
+    )
+
+    # Compute the (N, M) collateral matrix
+    collateral_all = np.maximum(-MtM - threshold, 0.0)
+    peak_per_path_full = collateral_all.max(axis=1)
+    p99_threshold = float(np.percentile(peak_per_path_full, 99))
+    stressed_indices = np.where(peak_per_path_full >= p99_threshold)[0]
+
+    # Sample up to 20 stressed paths
+    rng = np.random.default_rng(0)
+    n_show = min(20, len(stressed_indices))
+    if n_show > 0:
+        sample = rng.choice(stressed_indices, size=n_show, replace=False)
+    else:
+        sample = []
+
+    fig_t = go.Figure()
+    for i, idx in enumerate(sample):
+        fig_t.add_trace(go.Scatter(
+            x=delivery_months, y=collateral_all[idx, :] / 1e6,
+            mode="lines", line=dict(color=LIQUIDITY_COLOR, width=1.2),
+            opacity=0.35, showlegend=(i == 0),
+            name="Top 1% stressed paths" if i == 0 else None,
+            hovertemplate="Stressed path: %{y:.1f} M EUR<extra></extra>"
+        ))
+    # Expected line for reference
+    fig_t.add_trace(go.Scatter(
+        x=delivery_months, y=liquidity.EE_collateral / 1e6,
+        mode="lines", line=dict(color="white", width=2.5),
+        name="Expected (across all paths)",
+        hovertemplate="EE: %{y:.2f} M EUR<extra></extra>"
+    ))
+    fig_t.update_layout(**PLOTLY_LAYOUT, height=360,
+                        yaxis_title="M EUR posted",
+                        hovermode="x unified",
+                        legend=dict(orientation="h", yanchor="top", y=1.1, x=0))
+    st.plotly_chart(fig_t, use_container_width=True)
+    st.caption(f"Top 1% threshold = peak collateral ≥ {p99_threshold/1e6:.1f} M EUR. "
+               f"In these worst-case scenarios, Ørsted faces sustained large posts over multiple months "
+               f"rather than isolated spikes — relevant for treasury when sizing not just the buffer "
+               f"but also the duration of funding the buffer.")
 
     # Distribution histograms
     st.markdown("##### Distributions across all simulated paths")
