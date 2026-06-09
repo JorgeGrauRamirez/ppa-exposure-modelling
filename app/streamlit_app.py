@@ -344,68 +344,59 @@ with tab_price:
     {sigma:.2f} annualized, half-life {np.log(2)/kappa*365.25:.0f} days
     """)
 
-    # Spot distribution at horizons (user-selectable)
-    st.markdown("##### Spot distribution at selected horizons")
+    # Spot distribution at a single user-selected horizon
+    st.markdown("##### Spot distribution at a selected horizon")
     st.markdown(
         f"<p style='color:{TEXT_DIM};'>"
-        "Choose three forward-looking horizons to inspect the simulated spot distribution. "
-        "The amber dashed line marks the market forward at each date — by construction, the empirical mean "
-        "across simulated paths matches this value (martingale calibration)."
+        "Choose a forward-looking horizon to inspect the simulated spot distribution. "
+        "The amber dashed line marks the market forward at that date — by construction, the empirical "
+        "mean across simulated paths matches this value (martingale calibration)."
         "</p>",
         unsafe_allow_html=True,
     )
 
     n_months = len(delivery_months)
     available_months = [d.strftime("%b %Y") for d in delivery_months]
-    default_indices = [min(11, n_months - 1), min(35, n_months - 1), n_months - 1]
+    default_idx = min(35, n_months - 1)  # ~3Y ahead
 
-    sel_col1, sel_col2, sel_col3 = st.columns(3)
-    with sel_col1:
-        sel1 = st.selectbox("Horizon 1", available_months,
-                            index=default_indices[0], key="h1")
-    with sel_col2:
-        sel2 = st.selectbox("Horizon 2", available_months,
-                            index=default_indices[1], key="h2")
-    with sel_col3:
-        sel3 = st.selectbox("Horizon 3", available_months,
-                            index=default_indices[2], key="h3")
+    sel_horizon = st.selectbox("Horizon", available_months,
+                               index=default_idx, key="h_single")
+    h_idx = available_months.index(sel_horizon)
 
-    horizons_idx = [
-        available_months.index(sel1),
-        available_months.index(sel2),
-        available_months.index(sel3),
-    ]
-    horizons_labels = [sel1, sel2, sel3]
+    spot_at_h = sim.S_paths[:, h_idx]
+    fig_h = go.Figure()
+    fig_h.add_trace(
+        go.Histogram(x=spot_at_h, nbinsx=60,
+                     marker=dict(color=CREDIT_COLOR, opacity=0.65,
+                                 line=dict(color="rgba(0,0,0,0)", width=0)),
+                     showlegend=False,
+                     hovertemplate="Spot ≈ %{x:.0f} EUR/MWh<br>%{y} paths<extra></extra>")
+    )
+    fig_h.add_vline(x=forward_curve[h_idx], line_dash="dash",
+                    line_color=ACCENT, line_width=2,
+                    annotation_text=f"Market forward: {forward_curve[h_idx]:.1f}",
+                    annotation_position="top right")
+    fig_h.add_vline(x=float(spot_at_h.mean()), line_dash="dot",
+                    line_color="white", line_width=1, opacity=0.6)
 
-    fig_h = make_subplots(rows=1, cols=3, subplot_titles=horizons_labels,
-                          horizontal_spacing=0.06)
-
-    for col_idx, h_idx in enumerate(horizons_idx, start=1):
-        spot_at_h = sim.S_paths[:, h_idx]
-        fig_h.add_trace(
-            go.Histogram(x=spot_at_h, nbinsx=50,
-                         marker=dict(color=CREDIT_COLOR, opacity=0.65,
-                                     line=dict(color="rgba(0,0,0,0)", width=0)),
-                         showlegend=False,
-                         hovertemplate="Spot ≈ %{x:.0f} EUR/MWh<br>%{y} paths<extra></extra>"),
-            row=1, col=col_idx
-        )
-        # Vertical line at market forward
-        fig_h.add_vline(x=forward_curve[h_idx], line_dash="dash",
-                        line_color=ACCENT, line_width=2, row=1, col=col_idx)
-        # Vertical line at empirical mean (very close to forward)
-        fig_h.add_vline(x=float(spot_at_h.mean()), line_dash="dot",
-                        line_color="white", line_width=1, opacity=0.6, row=1, col=col_idx)
-
-    fig_h.update_layout(**PLOTLY_LAYOUT, height=300, showlegend=False)
-    fig_h.update_xaxes(title_text="EUR/MWh")
-    fig_h.update_yaxes(title_text="Paths", row=1, col=1)
+    fig_h.update_layout(**PLOTLY_LAYOUT, height=380,
+                        title=dict(text=f"Spot distribution at {sel_horizon}", font=dict(size=14)),
+                        xaxis_title="EUR/MWh",
+                        yaxis_title="Paths",
+                        showlegend=False)
     st.plotly_chart(fig_h, use_container_width=True)
-    last_idx = horizons_idx[-1]
-    spread = np.percentile(sim.S_paths[:, last_idx], 95) - np.percentile(sim.S_paths[:, last_idx], 5)
-    st.caption(f"Amber dashed = market forward; white dotted = empirical Monte Carlo mean. "
-               f"At **{horizons_labels[-1]}**, the model implies a {spread:.0f} EUR/MWh "
-               f"interquantile spread (p5 to p95), reflecting accumulated uncertainty from valuation to that horizon.")
+
+    spread = np.percentile(spot_at_h, 95) - np.percentile(spot_at_h, 5)
+    horizon_years = (delivery_months[h_idx] - valuation_date).days / 365.25
+    three_half_lives_days = 3 * np.log(2) / kappa * 365.25
+    st.caption(
+        f"At **{sel_horizon}** ({horizon_years:.1f} years from valuation), the model implies a "
+        f"{spread:.0f} EUR/MWh interquantile spread (p5 to p95). "
+        f"Note: under mean reversion, the variance of the spot saturates after roughly three half-lives "
+        f"(~{three_half_lives_days:.0f} days at the calibrated κ = {kappa:.2f}/year), so the dispersion "
+        f"is approximately constant for horizons beyond that point — a property of the one-factor model "
+        f"to bear in mind when interpreting long-horizon distributions."
+    )
 
     # Martingale check expandable
     with st.expander("Martingale check (audit-friendly)", expanded=False):
