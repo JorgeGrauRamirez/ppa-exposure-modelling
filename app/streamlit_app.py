@@ -150,13 +150,22 @@ with st.sidebar:
             default_kappa = params["parameters"]["kappa_per_year"]
             default_sigma = params["parameters"]["sigma_annualized"]
             default_c = params["shift_constant_c"]
-            st.caption(f"Calibrated from `{params.get('calibration_window', {}).get('frequency', '?')}` data")
+            calib_freq = (
+                params.get("calibration_frequency")
+                or params.get("calibration_window", {}).get("frequency")
+                or "monthly"
+            )
+            st.caption(f"Calibrated from `{calib_freq}` data")
         else:
             default_kappa, default_sigma, default_c = 8.0, 0.55, 100.0
             st.warning("No calibration file found — using defaults.")
 
         override = st.checkbox("Override calibrated parameters", False)
         if override:
+            st.warning(
+                "You are overriding calibrated model parameters. "
+                "Results should be interpreted as scenario analysis."
+            )
             kappa = st.number_input("κ (1/year)", 0.1, 200.0, float(default_kappa), 0.5)
             sigma = st.number_input("σ (annualized)", 0.01, 3.0, float(default_sigma), 0.05)
         else:
@@ -242,7 +251,7 @@ c4.metric("Peak collateral PFE 95%",
           f"{liquidity.peak_pfe95/1e6:.1f} M EUR",
           delta=f"{liquidity.peak_pfe95/exposure.notional_eur*100:.1f}% of notional",
           delta_color="off",
-          help=f"Recommended liquidity buffer at T = {threshold_m:.1f} M EUR threshold.")
+          help=f"Model-implied liquidity buffer at T = {threshold_m:.1f} M EUR threshold.")
 
 st.markdown("---")
 
@@ -253,7 +262,7 @@ st.markdown("---")
 
 tab_price, tab_exp, tab_liq, tab_sens, tab_assum = st.tabs([
     "Price model", "Exposure profile", "Liquidity overlay",
-    "Sensitivity", "Assumptions"
+    "Threshold sensitivity", "Assumptions"
 ])
 
 
@@ -264,9 +273,9 @@ with tab_price:
     st.markdown(
         f"<p style='color:{TEXT_DIM};'>"
         "The DK1 forward curve sets the <b>expected</b> spot at every monthly delivery. "
-        "Monte Carlo simulates 10,000 alternative realisations of how the actual spot might evolve, "
+        f"Monte Carlo simulates {int(n_paths):,} alternative realisations of how the actual spot might evolve, "
         "calibrated to historical DK1 dynamics. The model is <b>market-consistent</b>: the empirical "
-        "mean across paths reproduces the market curve at every horizon (martingale check below)."
+        "mean across paths should remain close to the market curve at every horizon, within Monte Carlo error."
         "</p>",
         unsafe_allow_html=True,
     )
@@ -340,8 +349,8 @@ with tab_price:
     st.markdown(
         f"<p style='color:{TEXT_DIM};'>"
         "How the model expects the spot to be distributed at three forward-looking horizons. "
-        "The amber dashed line marks the market forward at each date — by construction, the empirical mean "
-        "across simulated paths matches this value (martingale calibration)."
+        "The amber dashed line marks the market forward at each date. By construction, the empirical mean "
+        "across simulated paths should remain close to this value, within Monte Carlo error."
         "</p>",
         unsafe_allow_html=True,
     )
@@ -562,7 +571,7 @@ with tab_liq:
         f"At each month, the shaded area shows the {int(pfe_quantile*100)}th percentile of collateral "
         f"posted across all paths. Where fewer than {int((1-pfe_quantile)*100)}% of paths post collateral "
         f"in a given month (i.e., the deal is mostly in-the-money for Ørsted), the marginal PFE drops "
-        f"to zero. The **Recommended buffer ({rec_buffer:.1f} M EUR)** is a different statistic: the "
+        f"to zero. The **Model-implied liquidity buffer ({rec_buffer:.1f} M EUR)** is a different statistic: the "
         f"{int(pfe_quantile*100)}th percentile of the **per-path maximum** across the deal life — the "
         f"path-level worst-case buffer requirement."
     )
@@ -572,7 +581,7 @@ with tab_liq:
     st.markdown(
         f"<p style='color:{TEXT_DIM};'>"
         "Sample of trajectories from the worst 1% of paths (by peak collateral posted), with the "
-        "expected profile overlaid. Shows the actual dynamics a treasury team would face under stress, "
+        "expected profile overlaid. Shows illustrative dynamics a treasury team could face under modelled stress, "
         "rather than the smoothed quantile envelope."
         "</p>",
         unsafe_allow_html=True,
@@ -869,7 +878,7 @@ with tab_assum:
 
     with st.expander("Acknowledged limitations"):
         st.markdown("""
-        - Gaussian innovations underestimate tail risk (PFE biased conservative-low)
+        - Gaussian innovations may underestimate tail risk, so high-quantile PFE could be understated.
         - Single-factor model captures one timescale only
         - Baseload volume profile (no renewable shape effects)
         - Flat discount rate (no EUR OIS curve)
@@ -877,4 +886,4 @@ with tab_assum:
         """)
 
     st.markdown("---")
-    st.caption("Full methodology in `docs/technical_document.md`. Source code: see the GitHub repository.")
+    st.caption("Full methodology in `docs/technical_document.md`. Source code included in the submitted ZIP package.")
