@@ -173,9 +173,9 @@ with open(logo_path, "rb") as f:
 
 st.markdown(
     f"""
-    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 0px;">
-        <img src="data:image/png;base64,{img_base64}" width="45" style="border-radius: 0;">
-        <h1 style="margin: 0; padding: 0;">PPA Exposure Modelling</h1>
+    <div style="display: flex; align-items: center; gap: 15px; padding-top: 5px; margin-bottom: 0px;">
+        <img src="data:image/png;base64,{img_base64}" style="width: 45px; height: 45px; object-fit: contain; border-radius: 0; display: block;">
+        <h1 style="margin: 0; padding: 0; line-height: 1.1;">PPA Exposure Modelling</h1>
     </div>
     """, 
     unsafe_allow_html=True
