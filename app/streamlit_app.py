@@ -41,7 +41,9 @@ from ppa_exposure.validation import check_martingale
 DATA_DIR = ROOT / "data"
 
 logo_path = ROOT / "logo" / "Orsted_logo.png"
+logo_path_long = ROOT / "logo" / "Orsted_Logo_Old.png"
 orsted_logo = Image.open(logo_path)
+orsted_logo_long = Image.open(logo_path_long)
 
 # ---------------------------------------------------------------------------
 # Page configuration and theming
@@ -168,7 +170,7 @@ with st.sidebar:
 # Header
 # ---------------------------------------------------------------------------
 
-with open(logo_path, "rb") as f:
+with open(logo_path_long, "rb") as f:
     img_base64 = base64.b64encode(f.read()).decode()
 
 st.markdown(
