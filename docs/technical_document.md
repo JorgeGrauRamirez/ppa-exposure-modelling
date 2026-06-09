@@ -15,11 +15,11 @@ This document specifies a market-consistent Monte Carlo framework for measuring 
 |---|---|---|
 | Contract notional | **347 M EUR** | 100% |
 | Fixed price (at par) | **79.15 EUR/MWh** | — |
-| Maximum credit PFE (95%) | **38.5 M EUR** in Dec-27 | 11.1% |
+| Maximum credit PFE (95%) | **38.4 M EUR** in Dec-27 | 11.1% |
 | Maximum liquidity PFE (95%), no CSA | **17.8 M EUR** in Aug-26 | 5.1% |
-| Recommended liquidity buffer (CSA T = 5M) | **27.5 M EUR** (peak per path PFE 95%) | 7.9% |
+| Model-implied liquidity buffer (CSA T = 5M) | **27.6 M EUR** (peak per path PFE 95%) | 7.9% |
 | Largest plausible single-month margin call (T = 5M) | **19.7 M EUR** (PFE 95%) | 5.7% |
-| Probability of zero collateral posting (T = 5M) | **8.4%** of paths | — |
+| Probability of zero collateral posting (T = 5M) | **8.5%** of paths | — |
 
 **Key findings**:
 
@@ -54,7 +54,7 @@ where `V` is baseload capacity in MW, `h_m` is the number of hours in month *m*,
 | Volume | 100 MW baseload | Mid-sized PPA; representative of corporate offtake (Microsoft/Google deals are 200-500 MW; small corporate deals 10-50 MW). 100 MW × 24 h × ~30 days ≈ 72 GWh per month. |
 | Fixed price | At par (79.15 EUR/MWh) | MtM = 0 at inception. Standard market convention for fair-value pricing. |
 | Discount rate | 2% continuous, flat | Approximate EUR short rate. Production implementation would use a EUR OIS curve. |
-| Perspective | Ørsted as fixed receiver | Seller of physical power, receives fixed. Mirrors Ørsted's actual position as a renewable generator. |
+| Perspective | Ørsted as seller / fixed receiver | Seller of physical power, receives fixed. Mirrors Ørsted's actual position as a renewable generator. |
 
 > **All numerical results in this document refer to the base-case run specified above.** The accompanying Streamlit application permits interactive exploration of alternative parameter configurations (volume, threshold, model parameters, simulation settings). For reproducibility, the model artefacts (random seed 42, calibrated parameters persisted in `data/model_params.json`, monthly forward curve in `data/monthly_forward_curve_dk1_20260604.csv`) deterministically recreate the exact figures shown in this document.
 
@@ -135,8 +135,10 @@ dY_t = −κ Y_t dt + σ dW_t,    Y_0 = 0
 **Step A — OLS on log-shifted prices** fits a constant and harmonic seasonal coefficients on a Fourier basis with annual and semi-annual frequencies:
 
 ```
-X_t = θ + A1 cos(ωt) + B1 sin(ωt) + A2 cos(2ωt) + B2 sin(2ωt) + ε_t,    ω = 2π / 365.25
+X_t = θ + A1 cos(ωt) + B1 sin(ωt) + A2 cos(2ωt) + B2 sin(2ωt) + ε_t,    ω = 2π / 12
 ```
+
+Here, `t` is measured in monthly steps, so the annual seasonal frequency is `ω = 2π / 12`.
 
 Only annual and semi-annual harmonics are retained. Higher-order terms (third or fourth harmonic) capture short-period weekly patterns but do not contribute meaningfully to monthly-resolution exposure modelling; their omission also reduces overfitting risk on a finite sample.
 
@@ -159,7 +161,7 @@ Daily calibration on DK1 spot yields **κ ≈ 150 per year (half-life ≈ 1.7 da
 
 **The model adopts monthly calibration** on aggregated baseload data. The resulting κ (single-digit per year, half-life of months) captures the multi-month dynamics that matter for a monthly-settled PPA over a 5-year horizon. The intra-week dynamics observable in daily data are not material for monthly settlement and are deliberately not modelled. The single-sentence defence: *calibration frequency must match settlement frequency*.
 
-**Sample-size caveat**: monthly aggregation reduces the calibration window from ~1,950 daily observations to ~65 monthly observations (Jan-21 to Apr-26). This is sufficient for OLS seasonal estimation and borderline-adequate for AR(1) — large enough for point estimates, but tail diagnostics (Jarque-Bera, ACF at higher lags) carry more uncertainty than they would on a longer sample. A formal extension would use a longer historical window (pre-2021 data is available from Energinet but spans a regime with materially different supply mix).
+**Sample-size caveat**: monthly aggregation reduces the calibration window from ~1,950 daily observations to ~65 monthly observations, excluding the incomplete final month. This is sufficient for OLS seasonal estimation and borderline-adequate for AR(1) — large enough for point estimates, but tail diagnostics (Jarque-Bera, ACF at higher lags) carry more uncertainty than they would on a longer sample. A formal extension would use a longer historical window (pre-2021 data is available from Energinet but spans a regime with materially different supply mix).
 
 **One-factor limitation acknowledged**: a single-factor model captures one timescale only. The proper extension is the **Lucia-Schwartz two-factor model**, which simultaneously captures a slow drift component (multi-month) and a fast noise component (daily). This is the canonical next step.
 
@@ -267,7 +269,7 @@ The 95% confidence level is industry-standard for PFE reporting. The 99% level i
 | Metric | Value | Notes |
 |---|---|---|
 | EPE | 12.4 M EUR | Time-averaged Expected Exposure |
-| Max PFE (95%) | 38.5 M EUR | Peak in Dec-27 |
+| Max PFE (95%) | 38.4 M EUR | Peak in Dec-27 |
 | Max PFE (95%) as % of notional | 11.1% | — |
 
 ### 7.2 Liquidity exposure (Ørsted out-of-money)
@@ -286,7 +288,7 @@ The mirror-image metric. Symmetric definitions apply with `max(−MtM_t, 0)`.
 
 A naïve application of the log-normal price distribution would predict that liquidity exposure exceeds credit exposure: the heavy right tail of spot (occasional 300+ EUR/MWh spikes) translates into a heavy left tail of MtM for the fixed-receiver, suggesting larger downside (negative MtM, liquidity drain) than upside (positive MtM, credit exposure).
 
-**The base-case results show the opposite**: credit PFE (38.5 M) is approximately 2.2× larger than liquidity PFE (17.8 M). The explanation is structural and worth making explicit:
+**The base-case results show the opposite**: credit PFE (38.4 M) is approximately 2.2× larger than liquidity PFE (17.8 M). The explanation is structural and worth making explicit:
 
 The DK1 forward curve is **backwardated**: high prices in 2026-2027 (Nov-26 at 115 EUR/MWh, Dec-26 at 120) declining to low prices in 2030-2031 (~65-75 EUR/MWh). The par fixed price of 79 EUR/MWh sits between these regimes.
 
@@ -340,7 +342,7 @@ The CSA overlay converts MtM dynamics into the metrics that a treasury function 
 | Metric | Definition | Use |
 |---|---|---|
 | Peak collateral per path | max over time of `Coll_k^(n)` | Per-path maximum cash tied up. Distribution → buffer sizing. |
-| Peak collateral PFE 95% | 95th percentile of peak per path | Recommended liquidity buffer for the deal. |
+| Peak collateral PFE 95% | 95th percentile of peak per path | Model-implied liquidity buffer for the deal. |
 | Max single margin call per path | max over time of (`Coll_k − Coll_{k−1}`) | Largest single-period cash outflow event. Distribution → cash management. |
 | Fraction with no posting | proportion of paths with peak = 0 | Probability the deal is entirely secured under base assumptions. |
 
@@ -348,13 +350,13 @@ The CSA overlay converts MtM dynamics into the metrics that a treasury function 
 
 | Metric | Value | Notes |
 |---|---|---|
-| Peak collateral PFE 95% | **27.5 M EUR** | Recommended liquidity buffer (7.9% of notional). |
+| Peak collateral PFE 95% | **27.6 M EUR** | Model-implied liquidity buffer (7.9% of notional). |
 | Peak collateral PFE 99% | **36.0 M EUR** | Tail liquidity scenario. |
 | Max single-period margin call PFE 95% | **19.7 M EUR** | Largest plausible single-month cash outflow. |
 | Max single-period margin call PFE 99% | **25.3 M EUR** | Tail scenario for cash management. |
-| Fraction of paths with no posting | **8.4%** | Only ~1 in 12 paths avoids posting collateral entirely. |
+| Fraction of paths with no posting | **8.5%** | Only ~1 in 12 paths avoids posting collateral entirely. |
 
-The very low "no-posting" fraction (8.4%) is a meaningful finding: under base assumptions this PPA *structurally* requires collateral management capacity, not as a rare contingency but as a near-certainty over a 5-year horizon.
+The very low "no-posting" fraction (8.5%) is a meaningful finding: under base assumptions this PPA *structurally* requires collateral management capacity, not as a rare contingency but as a near-certainty over a 5-year horizon.
 
 ### 8.4 Threshold sensitivity — the credit/liquidity trade-off
 
@@ -364,7 +366,7 @@ The most operationally relevant output of the model. Sweeping threshold from 0 t
 |---|---|---|---|---|---|
 | 0.0 | 1.2% | 16.2 | 32.5 | 40.9 | 22.0 |
 | 2.5 | 3.7% | 13.8 | 30.0 | 38.4 | 20.8 |
-| **5.0** | **8.6%** | **11.4** | **27.5** | **35.9** | **19.7** |
+| **5.0** | **8.5%** | **11.4** | **27.6** | **35.9** | **19.7** |
 | 7.5 | 15.6% | 9.2 | 25.0 | 33.4 | 18.4 |
 | 10.0 | 25.9% | 7.2 | 22.5 | 30.9 | 16.9 |
 | 15.0 | 48.5% | 4.1 | 17.5 | 25.9 | 13.9 |
@@ -384,7 +386,7 @@ The relationship between threshold and peak PFE 95% is **almost exactly linear**
 | Simplification | Impact | Production extension |
 |---|---|---|
 | Single-factor model | One timescale only; cannot simultaneously capture daily and multi-month dynamics. | Lucia-Schwartz two-factor model with separate fast and slow components. |
-| Gaussian innovations | Tail too thin for power markets; PFE biased conservative-low. | Empirical or Student-t innovations; jump-diffusion. |
+| Gaussian innovations | Tail too thin for power markets; high-quantile PFE could be understated. | Empirical or Student-t innovations; jump-diffusion. |
 | Baseload volume profile | Realistic for industrial offtake; misses renewable-shape effects. | As-generated profile with hourly capture-price effect. |
 | Flat 2% discount rate | Acceptable for indicative figures. | EUR OIS / IRS curve at relevant tenors. |
 | Monthly settlement granularity | Misses intra-month dynamics (intraday peaks, weekend effects). | Hourly granularity for short-tenor deals (capture-price modelling). |
@@ -423,8 +425,6 @@ A test suite (`tests/`) covers:
 - Reproducibility (same seed → bit-identical output).
 
 All 13 tests pass via `pytest tests/`.
-
-**Development tooling**: the prototype was developed with AI-assisted coding (Claude) for code scaffolding, documentation, and refactoring acceleration. Methodological decisions, parameter choices, validation criteria, and the diagnostic of the daily-calibration issue (see §4.3) were determined by the author. The AI-assisted approach is treated as a productivity tool, not as a substitute for model judgement; this is the same separation that any junior modeller would maintain with an experienced colleague's code review.
 
 ---
 
